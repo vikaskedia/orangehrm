@@ -41,8 +41,6 @@ class EmployeeDao extends BaseDao {
             'termination' => 'e.termination_id',
             'location' => 'l.location_id',
             'employee_id_list' => 'e.emp_number',
-            'gender' => 'e.emp_gender',
-            'dob'   => 'e.emp_birthday',
     );
 
     /**
@@ -1702,11 +1700,9 @@ class EmployeeDao extends BaseDao {
     }
 
     /**
-     * @param $supNumber
-     * @param $subNumber
-     * @param $reportingMethod
-     * @return bool
-     * @throws DaoException
+     * Delete reportTo object
+     * @param int $supNumber $subNumber $reportingMethod
+     * @return boolean
      */
     public function deleteReportToObject($supNumber, $subNumber, $reportingMethod) {
 
@@ -1936,11 +1932,11 @@ class EmployeeDao extends BaseDao {
         
         $select = 'SELECT e.emp_number AS empNumber, e.employee_id AS employeeId, ' .
                 'e.emp_firstname AS firstName, e.emp_lastname AS lastName, ' .
-                'e.emp_middle_name AS middleName,e.emp_birthday AS employeeBirthday, e.termination_id AS terminationId, ' .
+                'e.emp_middle_name AS middleName, e.termination_id AS terminationId, ' .
                 'cs.name AS subDivision, cs.id AS subDivisionId,' .
                 'j.job_title AS jobTitle, j.id AS jobTitleId, j.is_deleted AS isDeleted, ' .
                 'es.name AS employeeStatus, es.id AS employeeStatusId, '.
-                'GROUP_CONCAT(s.emp_firstname, \'## \', s.emp_middle_name, \'## \', s.emp_lastname, \'## \',s.emp_number) AS supervisors,'.
+                'GROUP_CONCAT(s.emp_firstname, \'## \', s.emp_middle_name, \'## \', s.emp_lastname) AS supervisors,'.
                 'GROUP_CONCAT(DISTINCT loc.id, \'##\',loc.name) AS locationIds';
               
 
@@ -1984,17 +1980,12 @@ class EmployeeDao extends BaseDao {
                     } else if ($searchField == 'employee_status') {
                         $conditions[] = ' es.id = ? ';
                         $bindParams[] = $searchBy;
-                    } else if ($searchField == 'gender') {
-                        $conditions[] = ' e.emp_gender = ? ';
-                        $bindParams[] = $searchBy;
-                    } else if ($searchField == 'dob') {
-                        $conditions[] = ' e.emp_birthday = ? ';
-                        $bindParams[] = $searchBy;
                     } else if ($searchField == 'supervisorId') {
+                        
                         $subordinates = $this->_getSubordinateIds($searchBy);
                         if (count($subordinates) > 0) {
                             $conditions[] = ' e.emp_number IN (' . implode(',', $subordinates) . ') ';
-                        } else {
+                        } else {                        
                             $conditions[] = ' s.emp_number = ? ';
                             $bindParams[] = $searchBy;
                         }
@@ -2149,7 +2140,6 @@ class EmployeeDao extends BaseDao {
                     $employee->setMiddleName($row['middleName']);
                     $employee->setLastName($row['lastName']);
                     $employee->setTerminationId($row['terminationId']);
-                    $employee->setEmpBirthday($row['employeeBirthday']);
 
                     $jobTitle = new JobTitle();
                     $jobTitle->setId($row['jobTitleId']);
@@ -2175,12 +2165,11 @@ class EmployeeDao extends BaseDao {
 
                         $supervisorArray = explode(',', $supervisorList);
                         foreach ($supervisorArray as $supervisor) {
-                            list($first, $middle, $last,$id) = explode('##', $supervisor);
+                            list($first, $middle, $last) = explode('##', $supervisor);
                             $supervisor = new Employee();
                             $supervisor->setFirstName($first);
                             $supervisor->setMiddleName($middle);
                             $supervisor->setLastName($last);
-                            $supervisor->setEmpNumber($id);
                             $employee->supervisors[] = $supervisor;
                         }
                     }
@@ -2270,86 +2259,6 @@ class EmployeeDao extends BaseDao {
         }        
         
         return $ids;
-    }
-
-    /**
-     * Save employee dependent
-     *
-     * @param EmpDependent $dependent
-     * @return EmpDependent
-     * @throws PIMServiceException
-     */
-    public function saveEmployeeDependent(EmpDependent $dependent) {
-
-        $empNumber = $dependent->getEmpNumber();
-        $seqNo = $dependent->getSeqno();
-
-        $q = Doctrine_Query::create()
-            ->select('MAX(d.seqno)')
-            ->from('EmpDependent d')
-            ->where('d.emp_number = ?', $empNumber);
-        $result = $q->execute(array(), Doctrine::HYDRATE_ARRAY);
-
-        if (count($result) != 1) {
-            throw new PIMServiceException('MAX(seqno) failed.');
-        }
-        $seqNo = is_null($result[0]['MAX']) ? 1 : $result[0]['MAX'] + 1;
-
-        $dependent->seqno = $seqNo;
-        $dependent->save();
-        return $dependent;
-
-    }
-
-    /**
-     * Update employee dependent
-     *
-     * @param EmpDependent $empDependent
-     * @return mixed
-     * @throws PIMServiceException
-     */
-    public function updateEmployeeDependent(EmpDependent $empDependent)
-    {
-
-        $empNumber = $empDependent->getEmpNumber();
-        $seqNo = $empDependent->getSeqno();
-
-        $q = Doctrine_Query::create()
-            ->from('EmpDependent')
-            ->where('emp_number = ?', $empNumber)
-            ->andWhere('ed_seqno = ?', $seqNo);
-        $result = $q->execute(array());
-        $dependent = $result[0];
-
-        if (empty($dependent)) {
-            throw new PIMServiceException('Invalid Dependent');
-        } else {
-
-            $dependent->name = $empDependent->getName();
-            $dependent->relationship = $empDependent->getRelationship();
-            $dependent->date_of_birth = $empDependent->getDateOfBirth();
-            $dependent->save();
-            return $dependent;
-        }
-
-    }
-
-    /**
-     * Get employee termination reasons list
-     *
-     * @return Doctrine_Collection
-     * @throws DaoException
-     */
-    public function getTerminationReasonList() {
-
-        try {
-            $q = Doctrine_Query :: create()
-                ->from('TerminationReason')
-                ->orderBy('name ASC');
-            return $q->execute();
-        } catch (Exception $e) {
-            throw new DaoException($e->getMessage());
-        }
     }
 
 }
